@@ -2,54 +2,68 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"google.golang.org/grpc"
 	"io"
 	"log"
-	"time"
-	"zyy-grpc-server/src/service"
+	pb "zyy-grpc-server/src/stream"
+
+	"google.golang.org/grpc"
+)
+
+const (
+	PORT = "9002"
 )
 
 func main() {
-	conn, err := grpc.Dial("localhost:8888", grpc.WithInsecure())
+	conn, err := grpc.Dial(":"+PORT, grpc.WithInsecure())
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("grpc.Dial err: %v", err)
 	}
+
 	defer conn.Close()
 
-	client := service.NewHelloServiceClient(conn)
+	client := pb.NewStreamServiceClient(conn)
 
-	// 客户端先调用Channel方法，获取返回的流对象
-
-	stream, err01 := client.Channel(context.Background())
-	if err01 != nil {
-		log.Fatal(err01)
+	err = printLists(client, &pb.StreamRequest{Pt: &pb.StreamPoint{Name: "gRPC Stream Client: List", Value: 2018}})
+	if err != nil {
+		log.Fatalf("printLists.err: %v", err)
 	}
 
-	// 在客户端我们将发送和接收放到两个独立的Goroutine
+	err = printRecord(client, &pb.StreamRequest{Pt: &pb.StreamPoint{Name: "gRPC Stream Client: Record", Value: 2018}})
+	if err != nil {
+		log.Fatalf("printRecord.err: %v", err)
+	}
 
-	// 首先向服务端发送数据：
-	go func() {
-		for {
-			req := &service.Request{
-				Value: "test",
-			}
-			if err := stream.Send(req); err != nil {
-				log.Fatal(err)
-			}
-			time.Sleep(time.Second)
-		}
-	}()
+	err = printRoute(client, &pb.StreamRequest{Pt: &pb.StreamPoint{Name: "gRPC Stream Client: Route", Value: 2018}})
+	if err != nil {
+		log.Fatalf("printRoute.err: %v", err)
+	}
+}
 
-	// 然后再循环中接收服务端返回的数据
+func printLists(client pb.StreamServiceClient, r *pb.StreamRequest) error {
+	stream, err := client.List(context.Background(), r)
+	if err != nil {
+		return err
+	}
+
 	for {
-		reply, err := stream.Recv()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Fatal(err)
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			break
 		}
-		fmt.Println(reply.GetValue())
+		if err != nil {
+			return err
+		}
+
+		log.Printf("resp: pj.name: %s, pt.value: %d", resp.Pt.Name, resp.Pt.Value)
 	}
+
+	return nil
+}
+
+func printRecord(client pb.StreamServiceClient, r *pb.StreamRequest) error {
+	return nil
+}
+
+func printRoute(client pb.StreamServiceClient, r *pb.StreamRequest) error {
+	return nil
 }
